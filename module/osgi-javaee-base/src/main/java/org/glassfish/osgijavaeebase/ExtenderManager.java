@@ -27,6 +27,7 @@ import org.osgi.util.tracker.ServiceTracker;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -194,7 +195,7 @@ class ExtenderManager {
      */
     @SuppressWarnings("checkstyle:magicnumber")
     private class GlassFishServerTracker extends ServiceTracker {
-
+        private ExecutorService executorService = null;
         /**
          * Create a new instance.
          * @param ctx the bundle context
@@ -211,8 +212,15 @@ class ExtenderManager {
                     "addingService", "GlassFish has been created");
             final GlassFish gf = GlassFish.class.cast(context
                     .getService(reference));
-            ExecutorService executorService = Executors
-                    .newSingleThreadExecutor();
+            executorService = Executors
+                    .newSingleThreadExecutor(new ThreadFactory() {
+                        @Override
+                        public Thread newThread(Runnable r) {
+                            Thread t = new Thread(r);
+                            t.setDaemon(true);
+                            return t;
+                        }
+                    });
             return executorService.submit(new Runnable() {
                 @Override
                 public void run() {
@@ -267,6 +275,9 @@ class ExtenderManager {
             // interrupt if it is still waiting for gf to start or stop
             future.cancel(true);
             super.removedService(reference, service);
+            if(executorService != null) {
+                executorService.shutdownNow();
+            }
         }
     }
 }
